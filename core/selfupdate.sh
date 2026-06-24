@@ -16,8 +16,10 @@ echo "下载最新版…"
 if ! curl -fL --connect-timeout 20 --max-time 300 -o "$TMP/src.zip" "https://github.com/$REPO/archive/refs/heads/main.zip"; then
   curl -fL --connect-timeout 20 --max-time 300 -o "$TMP/src.zip" "https://github.com/$REPO/archive/refs/heads/master.zip"
 fi
-unzip -q "$TMP/src.zip" -d "$TMP"
-SRC="$(ls -d "$TMP"/*/ 2>/dev/null | head -1)"
+# 用 ditto 解压：macOS 原生，能正确处理仓库里的中文文件名；
+# 老的 unzip 遇到 GitHub 压缩包的 UTF-8 文件名会乱码+交互卡住，导致解压不全、更新失败。
+ditto -x -k "$TMP/src.zip" "$TMP/x" 2>/dev/null
+SRC="$(ls -d "$TMP"/x/*/ 2>/dev/null | head -1)"
 [ -d "$SRC" ] || { echo "解压失败"; exit 4; }
 [ -f "$SRC/hammerspoon/init.lua" ] || { echo "下载内容不像本工具集，已中止"; exit 5; }
 
