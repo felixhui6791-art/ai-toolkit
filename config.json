@@ -1,0 +1,76 @@
+{
+  "update_repo": "felixhui6791-art/ai-toolkit",
+  "models": {
+    "base_url": "http://localhost:11434",
+    "text": "qwen3:14b",
+    "speech": "sensevoice-small"
+  },
+  "speech_language": "zh",
+  "audio_device_index": "0",
+  "tools": {
+    "dictation": {
+      "name": "语音听写",
+      "icon": "🎙",
+      "desc": "按住快捷键说话，松开自动把文字打到光标处",
+      "hotkey": "rightcmd",
+      "enabled": true,
+      "kind": "speech"
+    },
+    "translate": {
+      "name": "划词翻译",
+      "icon": "🌐",
+      "desc": "选中文字，中英互译，结果替换原文",
+      "hotkey": "alt+t",
+      "enabled": true,
+      "kind": "text",
+      "preset": "translate"
+    },
+    "polish": {
+      "name": "划词润色",
+      "icon": "✨",
+      "desc": "选中文字，润色得更通顺自然",
+      "hotkey": "alt+p",
+      "enabled": true,
+      "kind": "text",
+      "preset": "polish"
+    },
+    "summarize": {
+      "name": "划词总结",
+      "icon": "📝",
+      "desc": "选中文字，提炼成要点",
+      "hotkey": "alt+s",
+      "enabled": true,
+      "kind": "text",
+      "preset": "summarize"
+    },
+    "screenshot": {
+      "name": "截图标注",
+      "icon": "📸",
+      "desc": "框选截图，可钉图/复制/保存/提字(OCR)/翻译",
+      "hotkey": "alt+a",
+      "enabled": true,
+      "kind": "screenshot"
+    },
+    "longshot": {
+      "name": "长截图",
+      "icon": "📜",
+      "desc": "框选区域→慢慢向下滚动→自动连拍拼成一张长图",
+      "hotkey": "alt+l",
+      "enabled": true,
+      "kind": "longshot"
+    },
+    "record": {
+      "name": "录屏",
+      "icon": "🎬",
+      "desc": "框选区域或整屏，录成 mov 视频；再按一次/点菜单栏🔴/Esc 停止，存到「影片/录屏收集」",
+      "hotkey": "alt+r",
+      "enabled": true,
+      "kind": "record"
+    }
+  },
+  "presets": {
+    "translate": "你是专业翻译。把下面的内容翻译成简体中文；如果原文已经全部是中文，则改为翻译成英文；中英混合的内容也整体翻译成简体中文。必须把全部内容逐句翻译，只输出译文，不要输出原文，不要任何解释。",
+    "polish": "你是中文润色助手。把下面这段话改写得更通顺、自然、专业，保持原意和语言。只输出润色后的结果，不要解释。",
+    "summarize": "你是总结助手。用简洁的中文提炼下面内容的要点，可用要点列表。只输出总结，不要解释。"
+  }
+}

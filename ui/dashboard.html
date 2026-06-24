@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>本地 AI 工具集 · 控制面板</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --line:#e8eaed; --txt:#1d1d1f; --sub:#86868b;
+          --accent:#0a84ff; --green:#34c759; --grey:#c7c7cc; --amber:#ff9f0a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;
+         background:var(--bg); color:var(--txt); }
+  .wrap { max-width:860px; margin:0 auto; padding:32px 20px 120px; }
+  h1 { font-size:26px; margin:0 0 4px; }
+  .subtitle { color:var(--sub); margin:0 0 24px; font-size:14px; }
+  .status { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:28px; }
+  .pill { display:flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line);
+          border-radius:999px; padding:7px 14px; font-size:13px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--grey); }
+  .dot.on { background:var(--green); } .dot.warn { background:var(--amber); }
+  h2 { font-size:15px; color:var(--sub); font-weight:600; margin:30px 0 12px; text-transform:none; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+          margin-bottom:12px; display:flex; align-items:center; gap:16px; }
+  .card .ico { font-size:26px; width:34px; text-align:center; }
+  .card .meta { flex:1; min-width:0; }
+  .card .name { font-size:16px; font-weight:600; }
+  .card .desc { font-size:13px; color:var(--sub); margin-top:3px; }
+  .card .ctrl { display:flex; align-items:center; gap:12px; flex-shrink:0; }
+  .hk { font-size:13px; font-family:ui-monospace,Menlo,monospace; background:#f0f1f3;
+        border:1px solid var(--line); border-radius:8px; padding:6px 10px; width:96px; text-align:center; }
+  .switch { position:relative; width:46px; height:28px; }
+  .switch input { display:none; }
+  .slider { position:absolute; inset:0; background:var(--grey); border-radius:999px; transition:.2s; cursor:pointer; }
+  .slider:before { content:""; position:absolute; width:22px; height:22px; left:3px; top:3px;
+                   background:#fff; border-radius:50%; transition:.2s; }
+  .switch input:checked + .slider { background:var(--green); }
+  .switch input:checked + .slider:before { transform:translateX(18px); }
+  .row { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+         margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .row .label { font-size:15px; font-weight:600; }
+  .row .label small { display:block; color:var(--sub); font-weight:400; font-size:12px; margin-top:2px; }
+  select, .txt { font-size:14px; padding:9px 12px; border:1px solid var(--line); border-radius:9px;
+                 background:#fff; min-width:240px; max-width:60%; }
+  .savebar { position:fixed; left:0; right:0; bottom:0; background:rgba(255,255,255,.9);
+             backdrop-filter:blur(10px); border-top:1px solid var(--line); padding:14px 20px; }
+  .savebar .inner { max-width:860px; margin:0 auto; display:flex; align-items:center; gap:14px; justify-content:flex-end; }
+  .msg { color:var(--sub); font-size:13px; margin-right:auto; }
+  button.save { background:var(--accent); color:#fff; border:0; border-radius:10px;
+                padding:11px 22px; font-size:15px; font-weight:600; cursor:pointer; }
+  button.save:active { opacity:.8; }
+  .hint { font-size:12px; color:var(--sub); margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🤖 本地 AI 工具集</h1>
+  <p class="subtitle">全部跑在你这台 Mac 上 · 按快捷键即用 · 不联网</p>
+
+  <div class="status" id="status"></div>
+
+  <h2>功能（点开关启用 / 停用，点方框改快捷键）</h2>
+  <div id="tools"></div>
+  <p class="hint">快捷键写法：单键如 <code>F5</code>；组合键如 <code>alt+t</code>、<code>cmd+shift+k</code>（alt=Option，cmd=Command）。</p>
+
+  <h2>接入的模型</h2>
+  <div class="row">
+    <div class="label">文本大脑（翻译/润色/总结）<small id="ram-note">读取内存中…</small></div>
+    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
+      <select id="model-text"></select>
+      <button id="dl-btn" onclick="pullModel()" style="display:none;background:var(--accent);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;">下载</button>
+    </div>
+  </div>
+  <p class="hint" id="dl-status"></p>
+  <div class="row">
+    <div class="label">语音转文字<small>本地 Whisper 模型</small></div>
+    <select id="model-speech"></select>
+  </div>
+  <div class="row">
+    <div class="label">模型服务地址<small>Ollama 本地服务</small></div>
+    <input class="txt" id="base-url" />
+  </div>
+</div>
+
+<div class="savebar"><div class="inner">
+  <span class="msg" id="msg"></span>
+  <button class="save" onclick="save()">保存设置</button>
+</div></div>
+
+<script>
+let STATE = null;
+const TOOL_ORDER = ["dictation","translate","polish","summarize","screenshot","longshot"];
+const SPEECH_OPTS = [
+  ["sensevoice-small","SenseVoice Small（推荐·中文强·小而快·本地）"]
+];
+const TEXT_MODELS = [
+  ["qwen3:1.7b","Qwen3 1.7B · 极小(~1.4GB) · 8GB可跑"],
+  ["qwen3:4b","Qwen3 4B · 小(~2.5GB) · 建议8–16GB"],
+  ["qwen3:8b","Qwen3 8B · 中(~5GB) · 建议16GB"],
+  ["qwen3:14b","Qwen3 14B · 大(~9GB) · 建议24GB+"],
+  ["qwen3:30b-a3b","Qwen3 30B · 很大(~18GB) · 建议48GB+"]
+];
+
+function pill(label, state){ // state: on | off | warn
+  return `<div class="pill"><span class="dot ${state}"></span>${label}</div>`;
+}
+
+async function load(){
+  const r = await fetch("/api/state"); STATE = await r.json();
+  const d = STATE.deps, ol = STATE.ollama;
+  document.getElementById("status").innerHTML =
+    pill(ol.running ? "Ollama 运行中" : "Ollama 未运行", ol.running?"on":"off") +
+    pill(d.whisper ? "语音引擎 已装" : "语音引擎 待装", d.whisper?"on":"warn") +
+    pill(d.ffmpeg ? "录音组件 已装" : "录音组件 待装", d.ffmpeg?"on":"warn") +
+    pill(d.hammerspoon ? "快捷键引擎 已装" : "快捷键引擎 待装", d.hammerspoon?"on":"warn");
+
+  const tools = STATE.config.tools || {};
+  document.getElementById("tools").innerHTML = TOOL_ORDER.filter(k=>tools[k]).map(k=>{
+    const t = tools[k];
+    return `<div class="card">
+      <div class="ico">${t.icon||"•"}</div>
+      <div class="meta"><div class="name">${t.name}</div><div class="desc">${t.desc||""}</div></div>
+      <div class="ctrl">
+        <input class="hk" id="hk-${k}" value="${t.hotkey||""}" />
+        <label class="switch"><input type="checkbox" id="en-${k}" ${t.enabled?"checked":""}><span class="slider"></span></label>
+      </div></div>`;
+  }).join("");
+
+  // 文本模型：按内存推荐 + 不同大小可选/下载
+  const machine = STATE.machine || {ram_gb:0, recommended:"qwen3:14b"};
+  const mt = document.getElementById("model-text");
+  const cur = STATE.config.models.text;
+  const installed = new Set(ol.models);
+  const note = document.getElementById("ram-note");
+  const haveText = installed.has(cur) || TEXT_MODELS.some(o=>installed.has(o[0]));
+  if(!haveText){           // 还没下载任何大模型 → 醒目提示去选一个下载
+    note.innerHTML = "⚠️ 还没下载大模型 —— 翻译/润色/总结要先在右边选一个型号点【下载】" +
+      (machine.ram_gb ? `（本机 ${machine.ram_gb}GB，推荐 ${machine.recommended}）` : "");
+    note.style.color = "var(--amber)"; note.style.fontWeight = "600";
+  }else{
+    note.textContent = machine.ram_gb ? `本机内存 ${machine.ram_gb}GB，推荐 ${machine.recommended}` : "本地 Ollama 模型";
+    note.style.color = ""; note.style.fontWeight = "";
+  }
+  let opts = TEXT_MODELS.slice();
+  if(cur && !opts.find(o=>o[0]===cur)) opts.unshift([cur, cur]);
+  mt.innerHTML = opts.map(o=>{
+    const tags=[];
+    if(installed.has(o[0])) tags.push("✓已装");
+    if(o[0]===machine.recommended) tags.push("⭐推荐");
+    return `<option value="${o[0]}" ${o[0]===cur?"selected":""}>${o[1]}${tags.length?"  "+tags.join(" "):""}</option>`;
+  }).join("");
+  mt.onchange = updateDlBtn;
+  updateDlBtn();
+
+  // 语音模型下拉
+  const ms = document.getElementById("model-speech");
+  const cs = STATE.config.models.speech;
+  let sopts = SPEECH_OPTS.slice();
+  if(cs && !sopts.find(o=>o[0]===cs)) sopts.unshift([cs,cs]);
+  ms.innerHTML = sopts.map(o=>`<option value="${o[0]}" ${o[0]===cs?"selected":""}>${o[1]}</option>`).join("");
+
+  document.getElementById("base-url").value = STATE.config.models.base_url;
+}
+
+async function save(){
+  const cfg = STATE.config;
+  TOOL_ORDER.filter(k=>cfg.tools[k]).forEach(k=>{
+    cfg.tools[k].hotkey = document.getElementById("hk-"+k).value.trim();
+    cfg.tools[k].enabled = document.getElementById("en-"+k).checked;
+  });
+  cfg.models.text = document.getElementById("model-text").value;
+  cfg.models.speech = document.getElementById("model-speech").value;
+  cfg.models.base_url = document.getElementById("base-url").value.trim();
+  const r = await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});
+  const msg = document.getElementById("msg");
+  msg.textContent = r.ok ? "已保存 ✅ 快捷键会自动生效" : "保存失败";
+  setTimeout(()=>msg.textContent="",4000);
+}
+
+function updateDlBtn(){
+  const sel = document.getElementById("model-text").value;
+  const installed = new Set((STATE.ollama&&STATE.ollama.models)||[]);
+  document.getElementById("dl-btn").style.display = installed.has(sel) ? "none" : "inline-block";
+}
+async function pullModel(){
+  const model = document.getElementById("model-text").value;
+  const st = document.getElementById("dl-status");
+  st.textContent = `正在下载 ${model} …（较大模型可能要几分钟到几十分钟，下完会自动可用）`;
+  await fetch("/api/pull",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model})});
+  const timer = setInterval(async ()=>{
+    const r = await fetch("/api/state"); const s = await r.json();
+    if((s.ollama.models||[]).includes(model)){
+      clearInterval(timer);
+      st.textContent = `✅ ${model} 已下载并设为当前模型`;
+      STATE = s; STATE.config.models.text = model;
+      await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(STATE.config)});
+      load();
+    }
+  }, 5000);
+}
+load();
+</script>
+</body>
+</html>

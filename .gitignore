@@ -1,0 +1,22 @@
+.venv/
+bin/ffmpeg
+models/
+recordings/
+logs/
+wheels/
+*.wav
+*.mov
+*.tiff
+.DS_Store
+__pycache__/
+
+# 编译好的截图程序 / 拼接器要进仓库（朋友更新时直接拿到，不用装 Xcode），所以不忽略它们：
+#   screenshot/AIShot.app  和  screenshot/stitch  都跟进 git。
+screenshot/aishot
+# 开发用的测试小工具二进制不进仓库：
+screenshot/analyze
+screenshot/analyze_live
+screenshot/dupcheck
+screenshot/gentest
+screenshot/gradshift
+screenshot/imgdiff

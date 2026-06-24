@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>截图·录屏 收集</title>
+<style>
+  :root { --bg:#1c1c1e; --card:#2c2c2e; --line:#3a3a3c; --txt:#fff; --sub:#9b9b9f; --accent:#0a84ff; --red:#ff453a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"PingFang SC",sans-serif; background:var(--bg); color:var(--txt); font-size:13px; }
+  .top { position:sticky; top:0; background:var(--bg); padding:12px 12px 8px; border-bottom:1px solid var(--line); z-index:5; }
+  .title { font-size:15px; font-weight:700; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+  .title small { color:var(--sub); font-weight:400; }
+  .sort { font-size:11px; font-weight:600; color:var(--accent); background:var(--card); border:1px solid var(--line); padding:3px 9px; border-radius:6px; cursor:pointer; }
+  .btns { display:flex; gap:8px; }
+  button { flex:1; border:0; border-radius:8px; padding:8px 0; font-size:12px; font-weight:600; cursor:pointer; }
+  .clr-all { background:#3a3a3c; color:#fff; }
+  .clr-sel { background:var(--red); color:#fff; opacity:.45; pointer-events:none; }
+  .clr-sel.on { opacity:1; pointer-events:auto; }
+  .grid { padding:10px; display:flex; flex-direction:column; gap:10px; }
+  .item { position:relative; background:var(--card); border:2px solid transparent; border-radius:10px; overflow:hidden; cursor:pointer; }
+  .item.sel { border-color:var(--accent); }
+  .item img { width:100%; display:block; max-height:200px; object-fit:cover; object-position:top; background:#000; }
+  .item .time { position:absolute; top:6px; right:6px; background:rgba(0,0,0,.62); border-radius:6px; padding:2px 8px; font-size:11px; font-weight:600; color:#fff; }
+  .item .ord { position:absolute; top:6px; left:32px; background:rgba(10,132,255,.85); border-radius:6px; padding:2px 7px; font-size:11px; font-weight:700; color:#fff; }
+  .item .chk { position:absolute; top:6px; left:6px; width:20px; height:20px; border-radius:50%; background:rgba(0,0,0,.5);
+               border:1.5px solid #fff; display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .item.sel .chk { background:var(--accent); border-color:var(--accent); }
+  .item .acts { position:absolute; bottom:6px; right:6px; display:flex; gap:5px; }
+  .item .acts span { background:rgba(0,0,0,.62); border-radius:6px; padding:3px 8px; font-size:11px; }
+  .item .acts span:active { background:var(--accent); }
+  .item .play { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:44px; height:44px;
+                border-radius:50%; background:rgba(0,0,0,.55); border:2px solid rgba(255,255,255,.9);
+                display:flex; align-items:center; justify-content:center; font-size:18px; color:#fff; pointer-events:none; }
+  .item .dur { position:absolute; bottom:6px; left:6px; background:rgba(255,69,58,.9); border-radius:6px;
+               padding:2px 7px; font-size:11px; font-weight:700; color:#fff; }
+  .empty { color:var(--sub); text-align:center; padding:40px 10px; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="title"><span>📸 截图·录屏 收集 <small id="cnt"></small></span><span class="sort" id="sortbtn" onclick="toggleSort()">新→旧 ⇅</span></div>
+    <div class="btns">
+      <button class="clr-all" onclick="clearAll()">🗑 全部清除</button>
+      <button class="clr-sel" id="clrsel" onclick="clearSelected()">清除选中</button>
+    </div>
+  </div>
+  <div class="grid" id="grid"></div>
+
+<script>
+let shots = [], sel = new Set(), lastSig = null, sortNewest = true;
+function toggleSort(){
+  sortNewest = !sortNewest;
+  document.getElementById("sortbtn").textContent = sortNewest ? "新→旧 ⇅" : "旧→新 ⇅";
+  render();
+}
+function fmtTime(ts){
+  const d = new Date(ts*1000), now = new Date(), p = n => String(n).padStart(2,"0");
+  const sameDay = d.toDateString() === now.toDateString();
+  const y = new Date(now); y.setDate(now.getDate()-1);
+  const yest = d.toDateString() === y.toDateString();
+  if(sameDay) return `今天 ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  if(yest)    return `昨天 ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${d.getMonth()+1}-${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function load(){
+  const data = await (await fetch("/api/shots")).json();
+  const sig = data.map(s=>s.name).join("|");
+  if(sig === lastSig) return;                 // 列表没变化就不重绘，避免一直闪
+  lastSig = sig;
+  shots = data;
+  sel = new Set([...sel].filter(n => shots.some(s=>s.name===n)));  // 保留仍存在的选中
+  render();
+}
+function render(){
+  document.getElementById("cnt").textContent = `(${shots.length})`;
+  const g = document.getElementById("grid");
+  if(shots.length===0){ g.innerHTML = `<div class="empty">还没有截图或录屏<br>截图(⌥A/⌥L)、录屏(⌥R)后会自动收集到这里</div>`; updateBtn(); return; }
+  const asc = [...shots].sort((a,b)=>a.ts-b.ts);              // 按先后(早→晚)编号
+  const ord = new Map(asc.map((s,i)=>[s.name, i+1]));          // #1=最先，越大越晚
+  const list = sortNewest ? [...asc].reverse() : asc;
+  g.innerHTML = list.map(s=>{
+    const nm = s.name.replace(/'/g, "\\'");
+    if(s.kind === "video"){
+      return `
+    <div class="item video ${sel.has(s.name)?'sel':''}" onclick="toggle('${nm}')">
+      <div class="chk">${sel.has(s.name)?'✓':''}</div>
+      <div class="ord">#${ord.get(s.name)}</div>
+      <div class="time">${fmtTime(s.ts)}</div>
+      <img src="/thumb?name=${encodeURIComponent(s.name)}" loading="lazy">
+      <div class="play">▶</div>
+      <div class="dur">🎬 ${s.dur ? fmtDur(s.dur) : "录屏"}</div>
+      <div class="acts">
+        <span onclick="event.stopPropagation();openInApp('${nm}')">播放</span>
+        <span onclick="event.stopPropagation();reveal('${nm}')">访达</span>
+      </div>
+    </div>`;
+    }
+    return `
+    <div class="item ${sel.has(s.name)?'sel':''}" onclick="toggle('${nm}')">
+      <div class="chk">${sel.has(s.name)?'✓':''}</div>
+      <div class="ord">#${ord.get(s.name)}</div>
+      <div class="time">${fmtTime(s.ts)}</div>
+      <img src="/shot?name=${encodeURIComponent(s.name)}" loading="lazy">
+      <div class="acts">
+        <span onclick="event.stopPropagation();copyShot('${nm}', this)">复制</span>
+        <span onclick="event.stopPropagation();openShot('${nm}')">打开</span>
+      </div>
+    </div>`;
+  }).join("");
+  updateBtn();
+}
+function toggle(name){ if(sel.has(name)) sel.delete(name); else sel.add(name); render(); }
+function updateBtn(){
+  const b = document.getElementById("clrsel");
+  b.classList.toggle("on", sel.size>0);
+  b.textContent = sel.size>0 ? `清除选中(${sel.size})` : "清除选中";
+}
+function fmtDur(s){ const m=Math.floor(s/60), x=s%60; return m+":"+String(x).padStart(2,"0"); }
+function openShot(name){ window.open("/shot?name="+encodeURIComponent(name), "_blank"); }
+async function copyShot(name, el){
+  await fetch("/api/shots/copy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
+  if(el){ const t=el.textContent; el.textContent="已复制✓"; setTimeout(()=>{el.textContent=t;},1200); }
+}
+async function openInApp(name){    // 录屏→用 QuickTime 等默认程序打开播放
+  await fetch("/api/shots/open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
+}
+async function reveal(name){       // 在访达里高亮
+  await fetch("/api/shots/reveal",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
+}
+async function del(names){
+  if(names.length===0) return;
+  await fetch("/api/shots/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({names})});
+  load();
+}
+function clearAll(){ if(shots.length && confirm("把全部 "+shots.length+" 项(截图/录屏)移到废纸篓？")) del(shots.map(s=>s.name)); }
+function clearSelected(){ del([...sel]); }
+load();
+setInterval(load, 4000);   // 自动刷新，截图后会出现
+</script>
+</body>
+</html>
